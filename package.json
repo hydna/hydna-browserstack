@@ -1,0 +1,10 @@
+{
+    "name": "hydna-browserstack",
+    "description": "Small cli that automates tests on browserstack.",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "cli":"0.4.4",
+        "browserstack": "0.2.0"
+    }
+}

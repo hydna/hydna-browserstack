@@ -1,0 +1,188 @@
+#!/usr/bin/env node
+
+var fs                      = require('fs');
+var browserstack            = require('browserstack');
+var cli                     = require('cli');
+
+
+var DEFAULT_WORKER_TIMEOUT  = 30; // seconds
+var CHECK_TIMEOUT           = 10; // seconds
+
+
+var running_workers         = [];
+var client                  = null;
+var available_browsers      = [];
+var test_count              = 0;
+var running_timeout         = DEFAULT_WORKER_TIMEOUT;
+
+
+
+function start(url, username, passwd, browsers, timeout){
+    
+    client = browserstack.createClient({
+        username: username,
+        password: passwd
+    });
+    
+    running_timeout = timeout;
+    
+    test_count = browsers.length;
+    
+    client.getBrowsers(function(error, available){
+        if(error){
+            cli.fatal("error getting browsers available for testing, check login details");
+        }else{
+            available_browsers = available;
+            
+            if(validate_browsers(browsers)){
+            
+                for(var i in browsers){
+                    
+                    browsers[i].url = url;
+                    browsers[i].timeout = running_timeout*2;
+                    
+                    client.createWorker(browsers[i], function(error, worker){
+                        if(!error){
+                            running_workers.push({"id": worker.id, "worker": worker, "created": new Date(), "started": null, "terminating": false});
+                        }else{
+                            cli.fatal("error creating worker: "+ browsers[i]);
+                        }
+                    });
+                }
+            
+                setInterval(function(){
+                    check_workers();
+                }, CHECK_TIMEOUT * 1000);
+            }else{
+                cli.fatal("provided browsers not available for testing");
+            }
+        }
+    });
+}
+
+function start_or_stop_worker(id){
+    for(var i in running_workers){
+        if(running_workers[i].id == id){
+            if(running_workers[i].started != null){
+                var now = new Date();
+                
+                if(((now.getTime() - running_workers[i].started.getTime())/1000) >= running_timeout){
+                    stop_worker(id);
+                }
+                
+            }else{
+                cli.info("job "+id+" is running");
+                running_workers[i].started = new Date();
+            }
+        }
+    }
+}
+
+function validate_browsers(browsers){
+    return true;
+}
+
+function check_workers(){
+    client.getWorkers(function(error, workers){
+        for(var i in workers){
+            if(workers[i].status == "running"){
+                start_or_stop_worker(workers[i].id);
+            }
+        }
+    });
+}
+
+function remove_from_running(id){
+    for(var i = running_workers.length-1; i > -1; i--){
+        if(running_workers[i].id == id){
+            running_workers.splice(i, 1);
+            test_count-=1;
+            if(running_workers.length == 0 && test_count == 0){
+                cli.ok("all done!");
+                process.exit();
+            }
+            break;
+        }
+    }
+}
+
+function stop_worker(id, callback){
+    
+    for(var i in running_workers){
+        if(running_workers[i].id == id){
+            
+            if(!running_workers[i].terminating){
+                running_workers[i].terminating = true;
+                client.terminateWorker(id, function(error, data){
+                    if(!error){
+                        cli.info("terminated worker: "+id);
+                        remove_from_running(id);
+                    }else{
+                        running_workers[i].terminating = false;
+                        if(callback){
+                            callback(error);
+                        }
+                    }
+                });
+            }
+        }
+    }
+}
+
+function abort(){
+   if(running_workers.length > 0){
+       cli.info("aborting running jobs...");
+       for(var i in running_workers){
+           stop_worker(running_workers[i].id, function(error){
+               if(error){
+                   process.exit();
+               }
+           });
+       }
+   }else{
+       cli.ok("all done!");
+       process.exit();
+   }
+}
+
+// parse options
+
+cli.parse({
+    username:   ['u', 'browserstack username', 'string'],
+    password:   ['p', 'browserstack password', 'string'],
+    file:       ['f', 'file with list of browsers to test, JSON formated', 'path'],
+    url:        ['l', 'url to run in browsers', 'string'],
+    timeout:    ['t', 'time to run each test before quitting, in seconds', 'number', DEFAULT_WORKER_TIMEOUT]
+});
+
+cli.main(function(args, options) {
+    
+    if(options.username && options.password && options.file && options.url){
+        fs.readFile(options.file, 'utf8', function(err, data){
+            
+            if(err){
+                cli.fatal("error opening file: "+options.file);
+            }
+            
+            try{
+                
+                var browsers = JSON.parse(data);
+                
+                cli.info("starting workers...");
+                
+                start(options.url, options.username, options.password, browsers, options.timeout);
+                
+                process.on('SIGINT', function(){
+                    abort();
+                });
+                
+            }catch(e){
+                cli.fatal("error parsing file: "+options.file);
+            }
+            
+        });
+        
+    }else{
+        cli.fatal("Invalid options, -h or --help for help");
+    }
+});

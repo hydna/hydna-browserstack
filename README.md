@@ -4,7 +4,7 @@ Starts browsers on different platforms with specified url on [browserstack](http
 
 ####Installation####
 
-    npm install git...
+    npm install git@github.com:hydna/hydna-browserstack.git
 
 ####Running####
 

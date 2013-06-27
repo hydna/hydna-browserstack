@@ -5,7 +5,7 @@ var browserstack            = require('browserstack');
 var cli                     = require('cli');
 
 
-var DEFAULT_WORKER_TIMEOUT  = 30; // seconds
+var DEFAULT_WORKER_TIMEOUT  = 120; // seconds
 var CHECK_TIMEOUT           = 10; // seconds
 
 

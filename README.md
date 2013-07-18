@@ -22,3 +22,7 @@ Starts browsers on different platforms with specified url on [browserstack](http
 ####Notes####
 
 If you abort the app (CTRL+C) before it has completed it's designated tasks, it tries to shutdown running jobs.
+
+####hydna testsuite####
+
+    http://testsuite.hydna.com/?domain=testing.hydna.net&signature=auto&autorun=1&autopost=1

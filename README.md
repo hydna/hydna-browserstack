@@ -25,4 +25,4 @@ If you abort the app (CTRL+C) before it has completed it's designated tasks, it 
 
 ####hydna testsuite####
 
-    http://testsuite.hydna.com/?domain=testing.hydna.net&signature=auto&autorun=1&autopost=1
+    http://testsuite.hydna.com/?domain=testing.hydna.net&signature=update&autorun=1&autopost=1

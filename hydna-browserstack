@@ -10,14 +10,17 @@ var CHECK_TIMEOUT           = 10; // seconds
 
 
 var running_workers         = [];
+var que                     = [];
 var client                  = null;
-var available_browsers      = [];
+var available_browsers      = null;
 var test_count              = 0;
 var running_timeout         = DEFAULT_WORKER_TIMEOUT;
+var is_parallel             = false;
+var non_parallel_index      = 0;
 
 
 
-function start(url, username, passwd, browsers, timeout){
+function start(url, username, passwd, browsers, timeout, parallel){
     
     client = browserstack.createClient({
         username: username,
@@ -26,7 +29,11 @@ function start(url, username, passwd, browsers, timeout){
     
     running_timeout = timeout;
     
+    is_parallel = parallel;
+    
     test_count = browsers.length;
+    
+    que = browsers;
     
     client.getBrowsers(function(error, available){
         if(error){
@@ -34,20 +41,27 @@ function start(url, username, passwd, browsers, timeout){
         }else{
             available_browsers = available;
             
-            if(validate_browsers(browsers)){
-            
-                for(var i in browsers){
+            if(validate_browsers(que)){
+                
+                for(var i in que){
+                
+                    que[i].url = url;
+                    que[i].timeout = running_timeout*2; // ? why *2?
                     
-                    browsers[i].url = url;
-                    browsers[i].timeout = running_timeout*2;
+                    if(is_parallel){
+                        create_worker(browsers[i]);
+                    }
                     
-                    client.createWorker(browsers[i], function(error, worker){
-                        if(!error){
-                            running_workers.push({"id": worker.id, "worker": worker, "created": new Date(), "started": null, "terminating": false});
-                        }else{
-                            cli.fatal("error creating worker: "+ browsers[i]);
-                        }
-                    });
+                }
+                
+                if(!is_parallel){
+                    
+                    que[non_parallel_index].url = url;
+                    que[non_parallel_index].timeout = running_timeout*2; // ? why *2?
+                    
+                    create_worker(browsers[non_parallel_index]);
+                    
+                    non_parallel_index += 1;
                 }
             
                 setInterval(function(){
@@ -60,6 +74,16 @@ function start(url, username, passwd, browsers, timeout){
     });
 }
 
+function create_worker(browser){
+    client.createWorker(browser, function(error, worker){
+        if(!error){
+            running_workers.push({"id": worker.id, "worker": worker, "created": new Date(), "started": null, "terminating": false});
+        }else{
+            cli.fatal("error creating worker: "+ browser);
+        }
+    });
+}
+
 function start_or_stop_worker(id){
     for(var i in running_workers){
         if(running_workers[i].id == id){
@@ -67,7 +91,7 @@ function start_or_stop_worker(id){
                 var now = new Date();
                 
                 if(((now.getTime() - running_workers[i].started.getTime())/1000) >= running_timeout){
-                    stop_worker(id);
+                    stop_worker(id, false);
                 }
                 
             }else{
@@ -106,7 +130,7 @@ function remove_from_running(id){
     }
 }
 
-function stop_worker(id, callback){
+function stop_worker(id, abort, callback){
     
     for(var i in running_workers){
         if(running_workers[i].id == id){
@@ -116,6 +140,16 @@ function stop_worker(id, callback){
                 client.terminateWorker(id, function(error, data){
                     if(!error){
                         cli.info("terminated worker: "+id);
+                        
+                        if(!is_parallel && !abort){
+                            if(non_parallel_index < que.length){
+                                
+                                create_worker(que[non_parallel_index]);   
+                                
+                                non_parallel_index += 1;
+                            }
+                        }
+                        
                         remove_from_running(id);
                     }else{
                         running_workers[i].terminating = false;
@@ -133,10 +167,17 @@ function abort(){
    if(running_workers.length > 0){
        cli.info("aborting running jobs...");
        for(var i in running_workers){
-           stop_worker(running_workers[i].id, function(error){
+           stop_worker(running_workers[i].id, true, function(error){
                if(error){
+                   cli.info("error stopping worker: "+error.message);
                    process.exit();
                }
+               
+               if(running_workers.length === 1){
+                   cli.ok("all done!");
+                   process.exit();
+               }
+               
            });
        }
    }else{
@@ -152,7 +193,8 @@ cli.parse({
     password:   ['p', 'browserstack password', 'string'],
     file:       ['f', 'file with list of browsers to test, JSON formated', 'path'],
     url:        ['l', 'url to run in browsers', 'string'],
-    timeout:    ['t', 'time to run each test before quitting, in seconds', 'number', DEFAULT_WORKER_TIMEOUT]
+    timeout:    ['t', 'time to run each test before quitting, in seconds', 'number', DEFAULT_WORKER_TIMEOUT],
+    parallel:    ['m', 'run in parallel mode or not', 'boolean', false]
 });
 
 cli.main(function(args, options) {
@@ -170,7 +212,7 @@ cli.main(function(args, options) {
                 
                 cli.info("starting workers...");
                 
-                start(options.url, options.username, options.password, browsers, options.timeout);
+                start(options.url, options.username, options.password, browsers, options.timeout, options.parallel);
                 
                 process.on('SIGINT', function(){
                     abort();

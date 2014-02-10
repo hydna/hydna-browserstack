@@ -5,6 +5,6 @@
     "private": true,
     "dependencies": {
         "cli":"0.4.4",
-        "browserstack": "0.2.0"
+        "browserstack": "1.0.1"
     }
 }

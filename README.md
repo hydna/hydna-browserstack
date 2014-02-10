@@ -18,6 +18,7 @@ Starts browsers on different platforms with specified url on [browserstack](http
     -l --url            URL to run in browsers (required)
     -t --timeout        Time to run each browser before quitting in seconds, default 30 sec (optional)
     -h --help           Show help
+    -m --mode           Run in parallel mode or not, default false
 
 ####Notes####
 

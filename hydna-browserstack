@@ -40,7 +40,9 @@ function start(url, username, passwd, browsers, timeout, parallel){
             cli.fatal("error getting browsers available for testing, check login details");
         }else{
             available_browsers = available;
-            
+           
+            console.log(available_browsers);
+
             if(validate_browsers(que)){
                 
                 for(var i in que){
@@ -79,6 +81,7 @@ function create_worker(browser){
         if(!error){
             running_workers.push({"id": worker.id, "worker": worker, "created": new Date(), "started": null, "terminating": false});
         }else{
+            console.log(error.message);
             cli.fatal("error creating worker: "+ browser);
         }
     });
